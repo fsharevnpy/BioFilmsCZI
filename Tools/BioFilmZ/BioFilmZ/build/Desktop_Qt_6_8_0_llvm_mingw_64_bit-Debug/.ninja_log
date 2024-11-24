@@ -1,0 +1,26 @@
+# ninja log v6
+13	95	7540560203637372	BioFilmZ_autogen/timestamp	a22954273c062dda
+13	95	7540560203637372	BioFilmZ_autogen/mocs_compilation.cpp	a22954273c062dda
+13	95	7540560203637372	C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/BioFilmZ_autogen/mocs_compilation.cpp	a22954273c062dda
+2135	2216	7540555126903432	BioFilmZ.exe	2c941ddf35db798f
+13	95	7540560203637372	C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/BioFilmZ_autogen/timestamp	a22954273c062dda
+749	2058	7540555113060489	CMakeFiles/BioFilmZ.dir/main.cpp.obj	3576f229b1274564
+745	2115	7540555113030094	CMakeFiles/BioFilmZ.dir/BioFilmZ_autogen/mocs_compilation.cpp.obj	e11922c1ba058d60
+750	2135	7540555113080508	CMakeFiles/BioFilmZ.dir/mainwindow.cpp.obj	2c41ea0dd665ed2c
+4	544	7540560918881501	build.ninja	292fc5ad6c331cea
+12	88	7540560940495495	BioFilmZ_autogen/timestamp	a22954273c062dda
+12	88	7540560940495495	BioFilmZ_autogen/mocs_compilation.cpp	a22954273c062dda
+12	88	7540560940495495	C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/BioFilmZ_autogen/timestamp	a22954273c062dda
+12	88	7540560940495495	C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/BioFilmZ_autogen/mocs_compilation.cpp	a22954273c062dda
+11	86	7540563820904077	BioFilmZ_autogen/timestamp	a22954273c062dda
+11	86	7540563820904077	BioFilmZ_autogen/mocs_compilation.cpp	a22954273c062dda
+11	86	7540563820904077	C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/BioFilmZ_autogen/timestamp	a22954273c062dda
+11	86	7540563820904077	C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/BioFilmZ_autogen/mocs_compilation.cpp	a22954273c062dda
+87	1356	7540563821659678	CMakeFiles/BioFilmZ.dir/mainwindow.cpp.obj	2c41ea0dd665ed2c
+1356	1435	7540563834314593	BioFilmZ.exe	2c941ddf35db798f
+12	88	7540569266591504	BioFilmZ_autogen/timestamp	a22954273c062dda
+12	88	7540569266591504	BioFilmZ_autogen/mocs_compilation.cpp	a22954273c062dda
+12	88	7540569266591504	C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/BioFilmZ_autogen/timestamp	a22954273c062dda
+12	88	7540569266591504	C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/BioFilmZ_autogen/mocs_compilation.cpp	a22954273c062dda
+89	1357	7540569267362997	CMakeFiles/BioFilmZ.dir/mainwindow.cpp.obj	2c41ea0dd665ed2c
+1357	1437	7540569280017882	BioFilmZ.exe	2c941ddf35db798f

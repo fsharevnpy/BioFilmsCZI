@@ -1,0 +1,9 @@
+C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/CMakeFiles/BioFilmZ.dir
+C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/CMakeFiles/edit_cache.dir
+C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/CMakeFiles/rebuild_cache.dir
+C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/CMakeFiles/list_install_components.dir
+C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/CMakeFiles/install.dir
+C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/CMakeFiles/install/local.dir
+C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/CMakeFiles/install/strip.dir
+C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/CMakeFiles/BioFilmZ_autogen_timestamp_deps.dir
+C:/Tools/BioFilmZ/BioFilmZ/build/Desktop_Qt_6_8_0_llvm_mingw_64_bit-Debug/CMakeFiles/BioFilmZ_autogen.dir
