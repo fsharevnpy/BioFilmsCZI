@@ -35,7 +35,7 @@ def detect_circles(image, dp=1.2, minD=5, param1=25, param2=6, start_radius=2, s
 
 if __name__ == "__main__":
     # Read the .czi file
-    czi = CziFile('/home/nguyen/Biofilms/image/Image_21.czi')
+    czi = CziFile('/home/nguyen/Biofilms_git/BioFilmsCZI/Biofilms/image/Image_21.czi')
     image_array, _ = czi.read_image()  # image_array has shape (0, 0, 0, ch, z, h, w)
 
     # Select the specific channel and Z slice
