@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from aicspylibczi import CziFile
+import matplotlib.pyplot as plt
 
 def detect_circles(image, dp=1.2, minD=5, param1=25, param2=6, start_radius=2, step=3):
     raw_circles = []
@@ -35,33 +36,27 @@ def detect_circles(image, dp=1.2, minD=5, param1=25, param2=6, start_radius=2, s
 
 if __name__ == "__main__":
     # Read the .czi file
-    czi = CziFile('/home/nguyen/Biofilms/image/Image_21.czi')
+    czi = CziFile('/home/nguyen/Biofilms_git/BioFilmsCZI/Biofilms/image/Image_21.czi')
     image_array, _ = czi.read_image()  # image_array has shape (0, 0, 0, ch, z, h, w)
 
     # Select the specific channel and Z slice
-    origin_image_1 = image_array[0, 0, 0, 1, 0, :, :]
-    origin_image_0 = image_array[0, 0, 0, 0, 0, :, :]
-
-    image_1 = ((origin_image_1 / image_array.max()) * (pow(2,8)-1)).astype(np.uint8)
-    image_1 = cv2.equalizeHist(image_1)
-
-    image_0 = ((origin_image_0 / image_array.max()) * (pow(2,8)-1)).astype(np.uint8)
+    selected_channel = 1
+    selected_z = 0
+    origin_image = image_array[0, 0, 0, selected_channel, selected_z, :, :]
+    image = ((origin_image / image_array.max()) * (pow(2,8)-1)).astype(np.uint8)
+    image = cv2.normalize(image, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
 
     # Non-Local Means Denoising
-    image_0 = cv2.fastNlMeansDenoising(image_0, None, h=30, templateWindowSize=5, searchWindowSize=21)
+    image = cv2.fastNlMeansDenoising(image, None, h=30, templateWindowSize=5, searchWindowSize=21)
 
     # erosion
     kernel = np.ones((2, 2), np.uint16)
-    image_0 = cv2.erode(image_0, kernel, iterations=1)
+    image = cv2.erode(image, kernel, iterations=1)
 
     # dilation
     kernel = np.ones((2, 2), np.uint16)
-    image_0 = cv2.dilate(image_0, kernel, iterations=1)
+    image = cv2.dilate(image, kernel, iterations=3)
 
-    _, image_1 = cv2.threshold(image_1, 128, 255, cv2.THRESH_BINARY)
-    _, image_0 = cv2.threshold(image_0, 128, 255, cv2.THRESH_BINARY)
-
-    image = image_1 - image_0
     # Setup for Hough Circles
     raw_circles = detect_circles(image)
 
@@ -92,10 +87,10 @@ if __name__ == "__main__":
         if not close:
             pass2_circles.append(circle)
 
-    image = cv2.cvtColor(origin_image_1, cv2.COLOR_GRAY2RGB)
+    image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB) # FIX ME: image --> origin_image
     for c in pass2_circles:
-        cv2.circle(image, (c[0], c[1]), c[2], (0, 0, pow(2,16)-1), 0)
-
+        cv2.circle(image, (c[0], c[1]), c[2], (0, pow(2,16)-1, 0), 0)
+    
     # Save and display the result
     output_path = 'watershed_result.png'
     cv2.imwrite(output_path, image)
@@ -103,3 +98,8 @@ if __name__ == "__main__":
     # Print confirmation
     print(f"Number of cells: {len(pass2_circles)}")
 
+    # FIX ME: Test only
+    plt.figure(figsize=(10, 5))
+    plt.imshow(image, cmap='gray', vmin = 0, vmax = 255)
+    # plt.hist(image[image>0].ravel(), bins=256, range=(0, 256), color='gray')
+    plt.show()
