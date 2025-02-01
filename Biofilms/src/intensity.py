@@ -49,11 +49,9 @@ if __name__ == "__main__":
     czi = CziFile('/home/nguyen/Biofilms_git/BioFilmsCZI/Biofilms/image/Image_21.czi')
     image_array, _ = czi.read_image()  # image_array has shape (0, 0, 0, ch, z, h, w)
 
-    # Select the specific channel and Z slice
-    selected_channel = 0
-    selected_z = 0
-    origin_image = image_array[0, 0, 0, selected_channel, selected_z, :, :]
-    image = ((origin_image / image_array.max()) * (pow(2,8)-1)).astype(np.uint8)
+    # Select the channel 0
+    merged_image = np.sum(image_array[0, 0, 0, 0, :, :, :], axis=0)
+    image = ((merged_image / image_array.max()) * (pow(2,8)-1)).astype(np.uint8)
 
     ###############################################
 
