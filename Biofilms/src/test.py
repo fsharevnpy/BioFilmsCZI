@@ -3,11 +3,21 @@ import numpy as np
 from aicspylibczi import CziFile
 import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
-
 from skimage.morphology import skeletonize
 
-def extract_skeleton_inside_contours(image, contours):
+def extract_skeleton_inside_contours(origin_image, image, contours):
+    """
+    Extract the skeleton inside closed contours, detect branch points, and mark them on the input image.
 
+    Parameters:
+    - origin_image: Original grayscale image.
+    - image: Processed image for skeletonization.
+    - contours: List of detected contours.
+
+    Returns:
+    - rgb_image: Input image with the skeleton marked in blue and branch points in red.
+    - num_skeletons: The number of detected skeletons.
+    """
     # Create a mask for contour filling
     contour_mask = np.zeros_like(image)
 
@@ -28,17 +38,33 @@ def extract_skeleton_inside_contours(image, contours):
     # Convert skeleton to 8-bit format
     skeleton = (skeleton * 255).astype(np.uint8)
 
+    # Label skeletons to count them
+    labeled_skeletons, num_skeletons = label(skeleton, connectivity=2, return_num=True)
+
     # Convert grayscale image to RGB for visualization
-    rgb_image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    rgb_image = cv2.cvtColor(origin_image, cv2.COLOR_GRAY2BGR)
 
-    # Overlay skeleton on the original image (Green color)
-    rgb_image[skeleton > 0] = [0, 0, 255]
+    # Overlay skeleton on the original image (Blue color)
+    rgb_image[skeleton > 0] = [255, 0, 0]
 
-    return rgb_image
+    # Detect branch points
+    branch_points = np.zeros_like(skeleton, dtype=np.uint8)
+    for y in range(1, skeleton.shape[0] - 1):
+        for x in range(1, skeleton.shape[1] - 1):
+            if skeleton[y, x] == 255:
+                neighbors = skeleton[y-1:y+2, x-1:x+2]
+                count = np.count_nonzero(neighbors) - 1
+                if count > 2:  # More than 2 neighbors means a branch point
+                    branch_points[y, x] = 255
+
+    # Mark branch points in red
+    rgb_image[branch_points > 0] = [0, 0, 255]
+
+    return rgb_image, num_skeletons
 
 if __name__ == "__main__":
     # Read the .czi file
-    czi = CziFile('/home/nguyen/Biofilms_git/BioFilmsCZI/Biofilms/image/Image_2.czi')
+    czi = CziFile('/home/nguyen/Biofilms_git/BioFilmsCZI/Biofilms/image/Image_21.czi')
     image_array, _ = czi.read_image()  # image_array has shape (0, 0, 0, ch, z, h, w)
 
     # Select the specific channel and Z slice
@@ -46,6 +72,7 @@ if __name__ == "__main__":
     selected_z = 0
     origin_image = image_array[0, 0, 0, selected_channel, selected_z, :, :]
     image = ((origin_image / image_array.max()) * (pow(2,8)-1)).astype(np.uint8)
+    origin_image = image
 
     #########################################################################
     # Apply Gaussian Blur to reduce noise
@@ -93,9 +120,13 @@ if __name__ == "__main__":
                 # Keep only the highest pixel inside the contour, set others to zero
                 final_result[(contour_mask > 0) & (image == max_pixel_value)] = max_pixel_value
 
-    final_result = extract_skeleton_inside_contours(final_result, contours)
+    test = result
+
+    final_result, num_skeletons = extract_skeleton_inside_contours(origin_image ,final_result, contours)
     #Detect how many time the skelton has been branching?
     #########################################################################
 
     cv2.imwrite("result.png", final_result)
-    cv2.imwrite("result_org.png", origin_image)
+    cv2.imwrite("result_org.png", test)
+    
+    print(f"Skeleton and branch points marked on input image and saved. Total Skeletons: {num_skeletons}")
