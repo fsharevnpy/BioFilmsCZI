@@ -6,18 +6,7 @@ from skimage.measure import label, regionprops
 from skimage.morphology import skeletonize
 
 def extract_skeleton_inside_contours(origin_image, image, contours):
-    """
-    Extract the skeleton inside closed contours, detect branch points, and mark them on the input image.
 
-    Parameters:
-    - origin_image: Original grayscale image.
-    - image: Processed image for skeletonization.
-    - contours: List of detected contours.
-
-    Returns:
-    - rgb_image: Input image with the skeleton marked in blue and branch points in red.
-    - num_skeletons: The number of detected skeletons.
-    """
     # Create a mask for contour filling
     contour_mask = np.zeros_like(image)
 
@@ -129,4 +118,4 @@ if __name__ == "__main__":
     cv2.imwrite("result.png", final_result)
     cv2.imwrite("result_org.png", origin_image)
     
-    print(f"Skeleton and branch points marked on input image and saved. Total Skeletons: {num_skeletons}")
+    print(f"Total branches: {num_skeletons}")
