@@ -1,41 +1,70 @@
 import cv2
 import numpy as np
 from aicspylibczi import CziFile
+import matplotlib.pyplot as plt
+from skimage.measure import label, regionprops
+from skimage.morphology import skeletonize
 
-def detect_circles(image, dp=1.2, minD=5, param1=25, param2=6, start_radius=2, step=3):
-    raw_circles = []
-    radius = start_radius
+def extract_skeleton_inside_contours(origin_image, image, contours):
+    """
+    Extract the skeleton inside closed contours, detect branch points, and mark them on the input image.
 
-    while True:
-        circles = cv2.HoughCircles(
-            image,
-            cv2.HOUGH_GRADIENT,
-            dp=dp,
-            minDist=minD,
-            param1=param1,
-            param2=param2,
-            minRadius=radius,
-            maxRadius=radius + step
-        )
-        
-        if circles is not None:
-            raw_circles.append(circles)
-            if len(circles[0]) == 1:
-                break
-        
-        minD += step
-        radius += step
-        if radius > image.shape[0] // 2:
-            break
+    Parameters:
+    - origin_image: Original grayscale image.
+    - image: Processed image for skeletonization.
+    - contours: List of detected contours.
 
-    # Concatenate results
-    if raw_circles:
-        return np.concatenate(raw_circles, axis=1)
-    return None
+    Returns:
+    - rgb_image: Input image with the skeleton marked in blue and branch points in red.
+    - num_skeletons: The number of detected skeletons.
+    """
+    # Create a mask for contour filling
+    contour_mask = np.zeros_like(image)
+
+    # Fill only closed contours on the mask
+    for contour in contours:
+        if is_closed_contour(contour):
+            cv2.drawContours(contour_mask, [contour], -1, 255, thickness=cv2.FILLED)
+
+    # Extract the region inside the closed contours
+    inside_region = cv2.bitwise_and(image, image, mask=contour_mask)
+
+    # Convert binary image to boolean for skeletonization
+    inside_region_bool = inside_region > 0  # Convert to True/False for skimage processing
+
+    # Apply selected skeletonization method
+    skeleton = skeletonize(inside_region_bool)
+
+    # Convert skeleton to 8-bit format
+    skeleton = (skeleton * 255).astype(np.uint8)
+
+    # Label skeletons to count them
+    labeled_skeletons, num_skeletons = label(skeleton, connectivity=2, return_num=True)
+
+    # Convert grayscale image to RGB for visualization
+    rgb_image = cv2.cvtColor(origin_image, cv2.COLOR_GRAY2BGR)
+
+    # Overlay skeleton on the original image (Blue color)
+    rgb_image[skeleton > 0] = [255, 0, 0]
+
+    # Detect branch points
+    branch_points = np.zeros_like(skeleton, dtype=np.uint8)
+    for y in range(1, skeleton.shape[0] - 1):
+        for x in range(1, skeleton.shape[1] - 1):
+            if skeleton[y, x] == 255:
+                neighbors = skeleton[y-1:y+2, x-1:x+2]
+                count = np.count_nonzero(neighbors) - 1
+                if count > 2:  # More than 2 neighbors means a branch point
+                    branch_points[y, x] = 255
+
+    # Mark branch points in red
+    rgb_image[branch_points > 0] = [0, 0, 255]
+
+    return rgb_image, num_skeletons
 
 if __name__ == "__main__":
     # Read the .czi file
-    czi = CziFile('/home/nguyen/Biofilms_git/BioFilmsCZI/Biofilms/image/Image_21.czi')
+    czi = CziFile('/home/nguyen/BIO/BioFilmsCZI/Biofilms/image/Image_21.czi')
     image_array, _ = czi.read_image()  # image_array has shape (0, 0, 0, ch, z, h, w)
 
     # Select the specific channel and Z slice
@@ -43,55 +72,61 @@ if __name__ == "__main__":
     selected_z = 0
     origin_image = image_array[0, 0, 0, selected_channel, selected_z, :, :]
     image = ((origin_image / image_array.max()) * (pow(2,8)-1)).astype(np.uint8)
+    origin_image = image
 
-    # Non-Local Means Denoising
-    image = cv2.fastNlMeansDenoising(image, None, h=30, templateWindowSize=5, searchWindowSize=21)
+    #########################################################################
+    # Apply Gaussian Blur to reduce noise
+    blurred = cv2.GaussianBlur(image, (5, 5), 0)
 
-    # erosion
-    kernel = np.ones((2, 2), np.uint16)
-    image = cv2.erode(image, kernel, iterations=1)
+    # Use Otsu's thresholding to detect bright cells
+    _, thresholded = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    # dilation
-    kernel = np.ones((2, 2), np.uint16)
-    image = cv2.dilate(image, kernel, iterations=1)
+    # Find contours of the bright cells
+    contours, _ = cv2.findContours(thresholded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    # Setup for Hough Circles
-    raw_circles = detect_circles(image)
+    # Create an empty mask
+    mask = np.zeros_like(image)
 
-    # Item1: Check if the surface is too dark
-    pass1_circles = []
-    if raw_circles[0] is not None:
-        circles = np.round(raw_circles[0]).astype('int')
-        for (x, y, r) in circles:
-            if 0 <= y < image.shape[0] and 0 <= x < image.shape[1]:            
-                # Draw the circle and mark the center
-                y_, x_ = np.ogrid[:image.shape[0], :image.shape[1]]
-                mask = (x_ - x)**2 + (y_ - y)**2 <= r**2
-                if np.mean(image[mask]) > (pow(2,8)/((1+np.sqrt(5))/2)):
-                    pass1_circles.append([x,y,r])
+    # Function to check if a contour is nearly closed
+    def is_closed_contour(contour, threshold=10):
+        start_point = contour[0][0]  # First point
+        end_point = contour[-1][0]   # Last point
+        distance = np.linalg.norm(start_point - end_point)  # Euclidean distance
+        return distance < threshold  # If distance is small, it's closed
 
-    # Item2: Remove too closed circles
-    pass2_circles = []
-    for circle in pass1_circles:
-        x, y, r = circle
-        close = False
+    # Fill only closed contours on the mask
+    for contour in contours:
+        if is_closed_contour(contour):
+            cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)  # Fill closed contours
 
-        for cx, cy, cr in pass2_circles:
-            distance = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
-            if distance < (r+cr)/2:
-                close = True
-                break
+    # Apply the mask to keep only the inside of contours
+    result = cv2.bitwise_and(image, image, mask=mask)
 
-        if not close:
-            pass2_circles.append(circle)
+    final_result = np.zeros_like(image)
+    # Process each closed contour
+    for contour in contours:
+        if is_closed_contour(contour):
+            # Create a mask for the specific contour
+            contour_mask = np.zeros_like(image)
+            cv2.drawContours(contour_mask, [contour], -1, 255, thickness=cv2.FILLED)
 
-    image = cv2.cvtColor(origin_image, cv2.COLOR_GRAY2RGB)
-    for c in pass2_circles:
-        cv2.circle(image, (c[0], c[1]), c[2], (0, pow(2,16)-1, 0), 0)
+            # Extract the pixels inside the contour
+            inside_pixels = image[contour_mask > 0]
+
+            if len(inside_pixels) > 0:
+                # Find the highest pixel value inside the contour
+                max_pixel_value = np.max(inside_pixels)
+
+                # Keep only the highest pixel inside the contour, set others to zero
+                final_result[(contour_mask > 0) & (image == max_pixel_value)] = max_pixel_value
+
+    test = result
+
+    final_result, num_skeletons = extract_skeleton_inside_contours(origin_image ,final_result, contours)
+    #Detect how many time the skelton has been branching?
+    #########################################################################
+
+    cv2.imwrite("result.png", final_result)
+    cv2.imwrite("result_org.png", origin_image)
     
-    # Save and display the result
-    output_path = 'watershed_result.png'
-    cv2.imwrite(output_path, image)
-
-    # Print confirmation
-    print(f"Number of cells: {len(pass2_circles)}")
+    print(f"Skeleton and branch points marked on input image and saved. Total Skeletons: {num_skeletons}")
