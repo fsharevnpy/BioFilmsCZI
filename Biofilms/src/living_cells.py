@@ -127,5 +127,5 @@ if __name__ == "__main__":
     beta=0    
     rgb_image = cv2.convertScaleAbs(rgb_image, alpha=alpha, beta=beta)
 
+    print(f"Live {result_arr[0][2]} - Live {result_arr[1][2]}")
     cv2.imwrite("result.png", rgb_image)
-    
