@@ -35,6 +35,7 @@ def extract_cell(image):
     contours, _ = cv2.findContours(cell_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     marked_mask = np.zeros_like(image)
+
     for contour in contours:
         scaled_contour = scale_contour(contour, scale_factor=1.5)
         cv2.drawContours(marked_mask, [scaled_contour], -1, 255, thickness=cv2.FILLED)
@@ -42,24 +43,31 @@ def extract_cell(image):
     # Extract the background
     cell = cv2.bitwise_and(image, image, mask=marked_mask)
     background = cv2.bitwise_and(image, image, mask=cv2.bitwise_not(marked_mask))
-    return background, cell
+
+    cell_area = cv2.countNonZero(marked_mask)
+    total_area = image.shape[0] * image.shape[1]
+    percentage = (cell_area / total_area) * 100
+    return background, cell, percentage
 
 if __name__ == "__main__":
     # Read the .czi file
     czi = CziFile('/home/nguyen/Biofilms_git/BioFilmsCZI/Biofilms/image/Image_21.czi')
     image_array, _ = czi.read_image()  # image_array has shape (0, 0, 0, ch, z, h, w)
 
-    # Select the channel 0
-    merged_image = np.sum(image_array[0, 0, 0, 0, :, :, :], axis=0)
-    image = ((merged_image / image_array.max()) * (pow(2,8)-1)).astype(np.uint8)
+    selected_channel = 0
+    selected_z = 3
+    origin_image = image_array[0, 0, 0, selected_channel, selected_z, :, :]
+    image = ((origin_image / image_array.max()) * (pow(2,8)-1)).astype(np.uint8)
 
     ###############################################
 
-    background, cell = extract_cell(image)
+    background, cell, percentage = extract_cell(image)
     # Display the results #########################
 
     # Count the number of zero pixels
-    print("intensity: ", np.sum(cell)/np.count_nonzero(cell), np.sum(background)/np.count_nonzero(background))
+    print("intensity: ", np.sum(cell)/np.count_nonzero(cell))
+    print("cell percentage: ", percentage)
+
     plt.figure(figsize=(10, 5))
     plt.subplot(1, 2, 1)
     plt.imshow(background, cmap='gray', vmin = 0, vmax = 255)
