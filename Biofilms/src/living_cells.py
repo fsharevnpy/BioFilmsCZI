@@ -1,9 +1,11 @@
 import cv2
+import math
 import numpy as np
 from aicspylibczi import CziFile
 import matplotlib.pyplot as plt
 from skimage.measure import label
 from skimage.morphology import skeletonize
+import math
 
 def extract_skeleton_inside_contours(image_array, selected_channel, selected_z):
     origin_image = image_array[0, 0, 0, selected_channel, selected_z, :, :]
@@ -36,6 +38,7 @@ def extract_skeleton_inside_contours(image_array, selected_channel, selected_z):
 
     # Apply the mask to keep only the inside of contours
     result = cv2.bitwise_and(image, image, mask=mask)
+    denoised = result
 
     final_result = np.zeros_like(image)
     # Process each closed contour
@@ -99,11 +102,16 @@ def extract_skeleton_inside_contours(image_array, selected_channel, selected_z):
     # Mark branch points in red
     rgb_image[branch_points > 0] = [0, 0, 255]
 
-    return rgb_image, origin_image, num_skeletons
+    return denoised, origin_image, num_skeletons
+
+def normalize_8bit(img, lower=1, upper=99):
+    p_low, p_high = np.percentile(img, (lower, upper))
+    img_scaled = np.clip((img - p_low) / (p_high - p_low + 1e-6) * 255, 0, 255)
+    return img_scaled.astype(np.uint8)
 
 if __name__ == "__main__":
     # Read the .czi file
-    czi = CziFile('/home/nguyen/Biofilms_git/BioFilmsCZI/Biofilms/image/Image_21.czi')
+    czi = CziFile('/home/nguyen/Biofilms_git/BioFilmsCZI/Biofilms/image/Bi-Bag-P-P1-3h-4.czi')
     image_array, _ = czi.read_image()  # image_array has shape (0, 0, 0, ch, z, h, w)
 
     # Select the specific channel and Z slice
@@ -113,19 +121,19 @@ if __name__ == "__main__":
     result_arr = []
     for selected_channel in selected_channel_arr:
         result_arr.append(extract_skeleton_inside_contours(image_array, selected_channel, selected_z))
-        # final_result, origin_image, num_skeletons = extract_skeleton_inside_contours(image_array, selected_channel, selected_z)
-    #Detect how many time the skelton has been branching?
+
     ratio = result_arr[0][2]/result_arr[1][2]
-    rgb_image = np.zeros((result_arr[0][1].shape[0], result_arr[1][1].shape[1], 3))
-    
-    offset=1.5
-    rgb_image[..., 1] = result_arr[0][1]/pow(ratio,offset)
-    rgb_image[..., 2] = result_arr[1][1]*pow(ratio,offset)
-    rgb_image = np.clip(rgb_image, 0, 255).astype(np.uint8)
+    clip_ratio = np.clip(ratio, 1/math.pi, math.pi)
 
-    alpha=offset
-    beta=0    
-    rgb_image = cv2.convertScaleAbs(rgb_image, alpha=alpha, beta=beta)
+    dead_scale = np.sqrt(clip_ratio)
+    live_scale = 1 / np.sqrt(clip_ratio)
 
-    print(f"Live {result_arr[0][2]} - Live {result_arr[1][2]}")
+    red_raw = result_arr[0][0] * dead_scale
+    green_raw = result_arr[1][0] * live_scale
+
+    rgb_image = np.zeros((*red_raw.shape, 3), dtype=np.uint8)
+    rgb_image[..., 1] = normalize_8bit(green_raw)
+    rgb_image[..., 2] = normalize_8bit(red_raw)
+
     cv2.imwrite("result.png", rgb_image)
+    print(f"Dead {result_arr[0][2]} - Live {result_arr[1][2]}")
