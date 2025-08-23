@@ -4,7 +4,6 @@ from aicspylibczi import CziFile
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
-import matplotlib.colors as colors
 
 def scale_contour(contour, scale_factor=1.2):
     # Calculate the centroid (center of mass) of the contour

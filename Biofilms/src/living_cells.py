@@ -1,139 +1,78 @@
+import sys
+from pathlib import Path
+
+# --- add ../inc to sys.path so we can import local modules like analyze ---
+# Resolve this file's directory; fallback to CWD if __file__ is not available
+try:
+    HERE = Path(__file__).resolve().parent
+except NameError:
+    HERE = Path.cwd()
+
+INC_DIR = (HERE / ".." / "inc").resolve()
+if str(INC_DIR) not in sys.path:
+    sys.path.insert(0, str(INC_DIR))
+
+# Now we can import from analyze.py inside ../inc
+from analyze import process_channel, compose_rgb, intensity_rgb
+from info_czi import parse_czi_metadata_from_file
+
 import cv2
-import math
-import numpy as np
 from aicspylibczi import CziFile
+import numpy as np
+from typing import List
+
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
-from skimage.measure import label
-from skimage.morphology import skeletonize
-import math
 
-def extract_skeleton_inside_contours(image_array, selected_channel, selected_z):
-    origin_image = image_array[0, 0, 0, selected_channel, selected_z, :, :]
-    image = ((origin_image / image_array.max()) * (pow(2,8)-1)).astype(np.uint8)
-    origin_image = image
-    #########################################################################
-    # Apply Gaussian Blur to reduce noise
-    blurred = cv2.GaussianBlur(image, (5, 5), 0)
+def main(czi_path: str, channels: List[int], z_index: int, out_png: str = "result.png") -> None:
+    # Read CZI
+    czi = CziFile(czi_path)
+    image_array, _ = czi.read_image()  # shape (0, 0, 0, ch, z, h, w)
 
-    # Use Otsu's thresholding to detect bright cells
-    _, thresholded = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # Process selected channels
+    results = []
+    for ch in channels:
+        results.append(process_channel(image_array, ch, z_index))
 
-    # Find contours of the bright cells
-    contours, _ = cv2.findContours(thresholded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Expect exactly two channels: [dead, live] like original code
+    if len(results) != 2:
+        raise ValueError("Expected exactly two channels in `channels` for composition (dead, live).")
 
-    # Create an empty mask
-    mask = np.zeros_like(image)
+    dead = results[0]
+    live = results[1]
 
-    # Function to check if a contour is nearly closed
-    def is_closed_contour(contour, threshold=10):
-        start_point = contour[0][0]  # First point
-        end_point = contour[-1][0]   # Last point
-        distance = np.linalg.norm(start_point - end_point)  # Euclidean distance
-        return distance < threshold  # If distance is small, it's closed
+    rgb_image = compose_rgb(
+        dead_brightest=dead["brightest_u8"],
+        live_brightest=live["brightest_u8"],
+        dead_count=dead["num_skeletons"],
+        live_count=live["num_skeletons"],
+    )
 
-    # Fill only closed contours on the mask
-    for contour in contours:
-        if is_closed_contour(contour):
-            cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)  # Fill closed contours
+    cv2.imwrite(out_png, rgb_image)
 
-    # Apply the mask to keep only the inside of contours
-    result = cv2.bitwise_and(image, image, mask=mask)
-    denoised = result
+    # --- print proportions instead of raw counts ---
+    dead_count = dead["num_skeletons"]
+    live_count = live["num_skeletons"]
+    total = dead_count + live_count
 
-    final_result = np.zeros_like(image)
-    # Process each closed contour
-    for contour in contours:
-        if is_closed_contour(contour):
-            # Create a mask for the specific contour
-            contour_mask = np.zeros_like(image)
-            cv2.drawContours(contour_mask, [contour], -1, 255, thickness=cv2.FILLED)
+    if total > 0:
+        dead_prop = dead_count / total
+        live_prop = live_count / total
+        ratio = dead_count / (live_count if live_count > 0 else 1e-9)
+        print(f"Dead: {dead_prop:.2%} ({dead_count}) | Live: {live_prop:.2%} ({live_count}) | Dead/Live ratio: {ratio:.3f}")
+    else:
+        print("Dead: 0.00% (0) | Live: 0.00% (0) | Dead/Live ratio: N/A")
 
-            # Extract the pixels inside the contour
-            inside_pixels = image[contour_mask > 0]
+    percentage, _, _ = intensity_rgb(rgb_image)
+    print(percentage)
 
-            if len(inside_pixels) > 0:
-                # Find the highest pixel value inside the contour
-                max_pixel_value = np.max(inside_pixels)
-
-                # Keep only the highest pixel inside the contour, set others to zero
-                final_result[(contour_mask > 0) & (image == max_pixel_value)] = max_pixel_value
-    
-    image = final_result
-    #########################################################################
-    # Create a mask for contour filling
-    contour_mask = np.zeros_like(image)
-
-    # Fill only closed contours on the mask
-    for contour in contours:
-        if is_closed_contour(contour):
-            cv2.drawContours(contour_mask, [contour], -1, 255, thickness=cv2.FILLED)
-
-    # Extract the region inside the closed contours
-    inside_region = cv2.bitwise_and(image, image, mask=contour_mask)
-
-    # Convert binary image to boolean for skeletonization
-    inside_region_bool = inside_region > 0  # Convert to True/False for skimage processing
-
-    # Apply selected skeletonization method
-    skeleton = skeletonize(inside_region_bool)
-
-    # Convert skeleton to 8-bit format
-    skeleton = (skeleton * 255).astype(np.uint8)
-
-    # Label skeletons to count them
-    labeled_skeletons, num_skeletons = label(skeleton, connectivity=2, return_num=True)
-
-    # Convert grayscale image to RGB for visualization
-    rgb_image = cv2.cvtColor(origin_image, cv2.COLOR_GRAY2BGR)
-
-    # Overlay skeleton on the original image (Blue color)
-    rgb_image[skeleton > 0] = [0, 0, 255]
-
-    # Detect branch points
-    branch_points = np.zeros_like(skeleton, dtype=np.uint8)
-    for y in range(1, skeleton.shape[0] - 1):
-        for x in range(1, skeleton.shape[1] - 1):
-            if skeleton[y, x] == 255:
-                neighbors = skeleton[y-1:y+2, x-1:x+2]
-                count = np.count_nonzero(neighbors) - 1
-                if count > 2:  # More than 2 neighbors means a branch point
-                    branch_points[y, x] = 255
-
-    # Mark branch points in red
-    rgb_image[branch_points > 0] = [0, 0, 255]
-
-    return denoised, origin_image, num_skeletons
-
-def normalize_8bit(img, lower=1, upper=99):
-    p_low, p_high = np.percentile(img, (lower, upper))
-    img_scaled = np.clip((img - p_low) / (p_high - p_low + 1e-6) * 255, 0, 255)
-    return img_scaled.astype(np.uint8)
+    metadata = parse_czi_metadata_from_file(czi_path)
+    print(metadata)
 
 if __name__ == "__main__":
-    # Read the .czi file
-    czi = CziFile('/home/nguyen/Biofilms_git/BioFilmsCZI/Biofilms/image/Bi-Bag-P-P1-3h-4.czi')
-    image_array, _ = czi.read_image()  # image_array has shape (0, 0, 0, ch, z, h, w)
-
-    # Select the specific channel and Z slice
-    selected_channel_arr = [0, 1]
+    # Example usage, keep your original path and channel order (dead first, live second)
+    czi_path = "/home/nguyen/Biofilms_git/BioFilmsCZI/Biofilms/image/Bi-Bag-P-P1-3h-4.czi"
+    selected_channels = [0, 1]  # [dead, live]
     selected_z = 0
-
-    result_arr = []
-    for selected_channel in selected_channel_arr:
-        result_arr.append(extract_skeleton_inside_contours(image_array, selected_channel, selected_z))
-
-    ratio = result_arr[0][2]/result_arr[1][2]
-    clip_ratio = np.clip(ratio, 1/math.pi, math.pi)
-
-    dead_scale = np.sqrt(clip_ratio)
-    live_scale = 1 / np.sqrt(clip_ratio)
-
-    red_raw = result_arr[0][0] * dead_scale
-    green_raw = result_arr[1][0] * live_scale
-
-    rgb_image = np.zeros((*red_raw.shape, 3), dtype=np.uint8)
-    rgb_image[..., 1] = normalize_8bit(green_raw)
-    rgb_image[..., 2] = normalize_8bit(red_raw)
-
-    cv2.imwrite("result.png", rgb_image)
-    print(f"Dead {result_arr[0][2]} - Live {result_arr[1][2]}")
+    main(czi_path, selected_channels, selected_z, out_png="result.png")
