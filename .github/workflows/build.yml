@@ -9,7 +9,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, macos-latest]   # add ubuntu-latest if cần
+        os: [windows-latest]   # add ubuntu-latest , macos-latest later
         py: ['3.8.10']
     runs-on: ${{ matrix.os }}
 
