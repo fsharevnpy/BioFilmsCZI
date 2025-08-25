@@ -22,55 +22,64 @@ jobs:
       - name: Install deps
         shell: bash
         run: |
-            set -euo pipefail
-            python -m pip install --upgrade pip
-            # Versions compatible with Python 3.8
-            pip install \
-              "numpy<2.0" \
-              "scipy<1.11" \
-              "networkx<3.0" \
-              scikit-image==0.20.0 \
-              pillow \
-              imageio \
-              imagecodecs \
-              tifffile \
-              czifile \
-              aicspylibczi \
-              opencv-python-headless \
-              pyinstaller
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          # Pin versions compatible with Python 3.8
+          pip install \
+            "numpy<2.0" \
+            "scipy<1.11" \
+            "networkx<3.0" \
+            scikit-image==0.20.0 \
+            pillow \
+            imageio \
+            imagecodecs \
+            tifffile \
+            czifile \
+            aicspylibczi \
+            pyinstaller
 
-      - name: Build (console + windowed)
+      - name: Build (console + gui)
         shell: bash
         run: |
           set -euo pipefail
+
           ENTRY="Biofilms/src/tool_tkinter.py"
 
+          # Common options for PyInstaller
           COMMON_OPTS=(
-            --onefile
             --noconfirm
             --clean
-            --hidden-import=cv2
-            --collect-binaries aicspylibczi
-            --collect-data aicspylibczi
-            --collect-binaries imagecodecs
-            --collect-data imagecodecs
+            # Ensure Tkinter dialogs are bundled (filedialog/messagebox)
+            --hidden-import=tkinter
+            --hidden-import=tkinter.filedialog
+            --hidden-import=tkinter.messagebox
+            --collect-submodules tkinter
+            # Bundle native/data for imaging stack
+            --collect-all aicspylibczi
+            --collect-all imagecodecs
             --collect-all tifffile
             --collect-all numpy
+            --collect-all skimage
           )
 
-          # Console build (để debug nếu crash)
-          pyinstaller "${COMMON_OPTS[@]}" "$ENTRY" --console
-          # Windowed build (bản GUI bình thường)
-          pyinstaller "${COMMON_OPTS[@]}" "$ENTRY" --noconsole
+          # 1) Console onefile (useful for seeing tracebacks if it crashes)
+          pyinstaller "${COMMON_OPTS[@]}" --onefile --console --name BiofilmsConsole "$ENTRY"
+
+          # 2) GUI onefile (no console)
+          pyinstaller "${COMMON_OPTS[@]}" --onefile --noconsole --name BiofilmsGUI "$ENTRY"
+
+          # Show resulting files
+          echo "Built artifacts:"
+          ls -lah dist || true
 
       - name: Upload artifact (console)
         uses: actions/upload-artifact@v4
         with:
           name: app-windows-console
-          path: dist/*
+          path: dist/BiofilmsConsole.exe
 
-      - name: Upload artifact (windowed)
+      - name: Upload artifact (gui)
         uses: actions/upload-artifact@v4
         with:
           name: app-windows
-          path: dist/*
+          path: dist/BiofilmsGUI.exe

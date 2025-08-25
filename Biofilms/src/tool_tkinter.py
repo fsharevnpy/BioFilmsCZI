@@ -1,15 +1,48 @@
-# --- crash logging early ---
-import faulthandler, os, sys, tempfile, datetime, traceback
-log_path = os.path.join(tempfile.gettempdir(), f"biofilms_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
-faulthandler.enable(open(log_path, "w"))
+# ===== crash logging early =====
+import os, sys, traceback, tempfile, datetime, faulthandler, atexit
 
-def log_ex():
-    with open(log_path, "a") as f:
-        f.write("\n--- exception ---\n")
-        traceback.print_exc(file=f)
+LOG_PATH = os.path.join(
+    tempfile.gettempdir(),
+    f"biofilms_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+)
 
-################################
-import cv2
+# Keep the file handle alive until process exit
+_FH = open(LOG_PATH, "w", buffering=1)
+try:
+    faulthandler.enable(_FH)  # native faults go here
+except Exception:
+    pass
+
+def _log_exception():
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write("\n--- exception ---\n")
+            traceback.print_exc(file=f)
+    except Exception:
+        pass
+
+def _excepthook(exc_type, exc, tb):
+    _log_exception()
+    try:
+        import tkinter as _tk
+        from tkinter import messagebox as _mb
+        _tk.Tk().withdraw()
+        _mb.showerror("Error", f"An error occurred.\nLog: {LOG_PATH}")
+    except Exception:
+        pass
+    # still propagate for console builds
+    sys.__excepthook__(exc_type, exc, tb)
+
+sys.excepthook = _excepthook
+
+@atexit.register
+def _close_log():
+    try:
+        _FH.close()
+    except Exception:
+        pass
+# ===== end crash logging =====
+
 import numpy as np
 from typing import List, Tuple, Dict, Any
 from skimage.measure import label
@@ -801,18 +834,20 @@ def update_preview():
         messagebox.showerror("Error", str(e))
 
 # ---- Load CZI file ----
-def load_czi(path: Path):
-    # Open .czi, load image array and metadata; reset caches
+def load_czi(path: Path, _czi: CziFile = None):
+    """Open .czi, read pixels + metadata; reset caches."""
     global czi_obj, image_array, axes_labels, meta_dict
     if czi_obj is not None:
         czi_obj = None
     try:
-        czi_obj = CziFile(str(path))
+        czi_obj = _czi or CziFile(str(path))
+        # If the crash happens here, it's very likely missing imagecodecs/tifffile DLLs
         arr, info = czi_obj.read_image()
+
         image_array = arr
         axes_labels = infer_axes(arr.shape, info)
 
-        # Reset caches when switching to a new file
+        # Reset caches
         overlay_cache.clear()
         merge_cache.clear()
         merge_stats_cache.clear()
@@ -826,27 +861,31 @@ def load_czi(path: Path):
         nZ = get_count("Z", arr.shape, axes_labels)
         cnum_var.set(str(nC)); znum_var.set(str(nZ))
 
-        spin_c.config(from_=0, to=max(0, nC - 1), state="normal" if (nC > 1 and not tick_merge.get()) else "disabled", wrap=True, increment=1)
+        spin_c.config(from_=0, to=max(0, nC - 1),
+                      state="normal" if (nC > 1 and not tick_merge.get()) else "disabled",
+                      wrap=True, increment=1)
         spin_c.delete(0, "end"); spin_c.insert(0, "0")
-        spin_z.config(from_=0, to=max(0, nZ - 1), state="normal" if nZ > 1 else "disabled", wrap=True, increment=1)
+        spin_z.config(from_=0, to=max(0, nZ - 1),
+                      state="normal" if nZ > 1 else "disabled",
+                      wrap=True, increment=1)
         spin_z.delete(0, "end"); spin_z.insert(0, "0")
 
-        # Show/hide C control according to Merge state
         _apply_c_visibility()
-
         meta_dict = parse_czi_metadata_from_czi(czi_obj)
 
         update_preview()
         if current_view == "info":
             render_info_view()
     except Exception as e:
-        image_array = None; axes_labels = ""; meta_dict = {}
-        czi_obj = None
-        messagebox.showerror("Error", f"Failed to open CZI:\n{e}")
+        _log_exception()
+        image_array = None; axes_labels = ""; meta_dict = {}; czi_obj = None
+        messagebox.showerror("Error", f"Failed to open CZI:\n{e}\n\nLog: {LOG_PATH}")
         file_var.set("-"); shape_var.set("-"); axes_var.set("-")
         cnum_var.set("-"); znum_var.set("-")
-        if current_view == "image": refresh_layout_and_view()
-        else: render_info_view()
+        if current_view == "image":
+            refresh_layout_and_view()
+        else:
+            render_info_view()
 
 # ---- Multi-file + GUI plumbing ----
 def on_select_file(event=None):
@@ -855,17 +894,55 @@ def on_select_file(event=None):
     load_czi(Path(file_list[sel[0]]))
 
 def browse_files():
+    """Run on UI thread; log any exception from filedialog itself."""
     global file_list
-    fns = filedialog.askopenfilenames(
-        title="Choose CZI files",
-        filetypes=[("Zeiss CZI files", "*.czi"), ("All files", "*.*")]
-    )
-    if not fns: return
+    try:
+        fns = filedialog.askopenfilenames(
+            title="Choose CZI files",
+            filetypes=[("Zeiss CZI files", "*.czi"), ("All files", "*.*")]
+        )
+    except Exception:
+        _log_exception()
+        messagebox.showerror("Browse error", f"Failed to open file dialog.\nSee log:\n{LOG_PATH}")
+        return
+
+    if not fns:
+        return
+
     file_list = list(fns)
     listbox.delete(0, tk.END)
-    for f in file_list: listbox.insert(tk.END, Path(f).name)
+    for f in file_list:
+        listbox.insert(tk.END, Path(f).name)
     listbox.selection_set(0)
-    load_czi(Path(file_list[0]))
+
+    # DEBUG: try step-by-step open to pinpoint crash location
+    _debug_open_czi(Path(file_list[0]))
+
+def _debug_open_czi(path: Path):
+    """Open CZI step-by-step to pinpoint native crash location."""
+    try:
+        # Step 1: constructor only
+        czi = CziFile(str(path))
+    except Exception:
+        _log_exception()
+        messagebox.showerror("CZI error (open)", f"Failed at CziFile(...)\n{path}\n\nLog: {LOG_PATH}")
+        return
+
+    try:
+        # Step 2: metadata only (should be cheap)
+        _ = czi.meta
+    except Exception:
+        _log_exception()
+        messagebox.showerror("CZI error (meta)", f"CziFile.meta failed\n{path}\n\nLog: {LOG_PATH}")
+        return
+
+    try:
+        # Step 3: full image read (likely heavy; if crash here → codecs/DLL)
+        load_czi(path, _czi=czi)
+    except Exception:
+        # load_czi already shows message; ensure logged
+        _log_exception()
+        return
 
 def on_close():
     try:
