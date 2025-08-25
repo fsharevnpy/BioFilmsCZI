@@ -890,8 +890,15 @@ def load_czi(path: Path, _czi: CziFile = None):
 # ---- Multi-file + GUI plumbing ----
 def on_select_file(event=None):
     sel = listbox.curselection()
-    if not sel: return
-    load_czi(Path(file_list[sel[0]]))
+    if not sel:
+        return
+    idx = sel[0]
+    if idx >= len(file_list):
+        return
+    try:
+        load_czi(Path(file_list[idx]))
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to load file:\n{e}")
 
 def browse_files():
     """Run on UI thread; log any exception from filedialog itself."""
