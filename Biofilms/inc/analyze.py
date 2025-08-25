@@ -78,28 +78,33 @@ def skeletonize_inside_closed_contours(image: np.ndarray, contours: List[np.ndar
 
 
 def detect_branch_points(skeleton_u8: np.uint8) -> np.uint8:
-    """Detect simple branch points: skeleton pixel with >2 neighbors in 3x3 neighborhood."""
-    sk = skeleton_u8
-    h, w = sk.shape
-    bp = np.zeros_like(sk, dtype=np.uint8)
-    for y in range(1, h - 1):
-        for x in range(1, w - 1):
-            if sk[y, x] == 255:
-                neighbors = sk[y - 1:y + 2, x - 1:x + 2]
-                cnt = np.count_nonzero(neighbors) - 1
-                if cnt > 2:
-                    bp[y, x] = 255
+    """Detect branch points using a 3x3 convolution (no Python loops).
+    A branch point is a skeleton pixel whose 8-neighbor count > 2.
+    """
+    # Ensure binary 0/1
+    sk = (skeleton_u8 > 0).astype(np.uint8)
+
+    # 3x3 ones kernel counts the center + 8 neighbors
+    kernel = np.ones((3, 3), dtype=np.uint8)
+
+    # Convolution with zero padding on borders
+    # neighbor_sum = count(center + neighbors); subtract center to get neighbors only
+    neighbor_sum = cv2.filter2D(sk, ddepth=cv2.CV_8U, kernel=kernel, borderType=cv2.BORDER_CONSTANT)
+    neighbor_cnt = neighbor_sum - sk
+
+    # Branch point if pixel is skeleton and has more than 2 neighbors
+    bp = ((sk == 1) & (neighbor_cnt > 2)).astype(np.uint8) * 255
     return bp
 
 
 def overlay_skeleton(origin_gray: np.uint8, skeleton_u8: np.uint8, branch_points_u8: np.uint8 = None) -> np.ndarray:
     """Overlay skeleton (and optional branch points) on original gray image as BGR."""
     rgb = cv2.cvtColor(origin_gray, cv2.COLOR_GRAY2BGR)
-    # Blue for skeleton
-    rgb[skeleton_u8 > 0] = [255, 0, 0]  # B, G, R
-    # Red for branch points (optional)
+    # Orange for skeleton
+    rgb[skeleton_u8 > 0] = [0, 100, 255]  # B, G, R
+    # Blue for branch points (optional)
     if branch_points_u8 is not None:
-        rgb[branch_points_u8 > 0] = [0, 0, 255]
+        rgb[branch_points_u8 > 0] = [255, 0, 0]
     return rgb
 
 

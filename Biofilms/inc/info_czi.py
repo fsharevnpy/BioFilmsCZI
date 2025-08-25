@@ -1,5 +1,4 @@
 from aicspylibczi import CziFile
-from pprint import pprint
 
 def parse_czi_metadata_from_file(filepath):
     czi = CziFile(filepath)
