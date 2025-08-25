@@ -36,16 +36,16 @@ jobs:
         shell: bash
         run: |
           ENTRY="Biofilms/src/tool_tkinter.py"
-          pyinstaller ^
-            --noconfirm ^
-            --clean ^
-            --onefile ^
-            --noconsole ^
-            --name BiofilmsGUI ^
-            --collect-all aicspylibczi ^
-            --collect-all tifffile ^
-            --collect-all imagecodecs ^
-            --collect-binaries cv2 ^
+          pyinstaller \
+            --noconfirm \
+            --clean \
+            --onefile \
+            --noconsole \
+            --name BiofilmsGUI \
+            --collect-all aicspylibczi \
+            --collect-all tifffile \
+            --collect-all imagecodecs \
+            --collect-binaries cv2 \
             "$ENTRY"
 
       - name: Upload artifact (GUI exe)
