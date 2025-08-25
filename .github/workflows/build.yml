@@ -39,41 +39,51 @@ jobs:
             opencv-python-headless \
             pyinstaller
 
-      - name: Build (console + gui)
+      - name: Build (debug onedir + console onefile + gui onefile)
         shell: bash
         run: |
           set -euo pipefail
-
           ENTRY="Biofilms/src/tool_tkinter.py"
 
-          # Common options for PyInstaller
           COMMON_OPTS=(
             --noconfirm
             --clean
-            # Tkinter imports
+            # Tk/Tcl (filedialog/messagebox)
             --hidden-import=tkinter
+            --hidden-import=_tkinter
             --hidden-import=tkinter.filedialog
             --hidden-import=tkinter.messagebox
             --collect-submodules tkinter
             # OpenCV
             --hidden-import=cv2
             --collect-submodules cv2
-            # Imaging libs
+            --collect-binaries cv2
+            # Imaging stack
             --collect-all aicspylibczi
             --collect-all imagecodecs
+            --collect-binaries imagecodecs
             --collect-all tifffile
             --collect-all numpy
             --collect-all skimage
           )
 
-          # 1) Console onefile (debug)
-          pyinstaller "${COMMON_OPTS[@]}" --onefile --console --name BiofilmsConsole "$ENTRY"
+          # 1) DEBUG: onedir + console (easier to inspect DLLs)
+          pyinstaller "${COMMON_OPTS[@]}" --onedir  --console  --name BiofilmsDebug   "$ENTRY"
 
-          # 2) GUI onefile
-          pyinstaller "${COMMON_OPTS[@]}" --onefile --noconsole --name BiofilmsGUI "$ENTRY"
+          # 2) Release (console) onefile
+          pyinstaller "${COMMON_OPTS[@]}" --onefile --console  --name BiofilmsConsole "$ENTRY"
+
+          # 3) Release (GUI) onefile
+          pyinstaller "${COMMON_OPTS[@]}" --onefile --noconsole --name BiofilmsGUI     "$ENTRY"
 
           echo "Built artifacts:"
           ls -lah dist || true
+
+      - name: Upload artifact (debug-onedir)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-windows-debug-onedir
+          path: dist/BiofilmsDebug/**
 
       - name: Upload artifact (console)
         uses: actions/upload-artifact@v4
