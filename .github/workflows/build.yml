@@ -8,30 +8,47 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-        py: ['3.11']
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        py: ['3.10']  # safer for native wheels
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.py }}
+
       - name: Install deps
         shell: bash
         run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller czifile imageio numpy
+          python -m pip install --upgrade pip wheel
+          # Always install these
+          pip install pyinstaller pillow numpy
+          # aicspylibczi has wheels for Win/Linux x86_64; macOS arm64 may fail
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            pip install czifile  # fallback reader on macOS
+          else
+            pip install aicspylibczi
+          fi
+
       - name: Build
         shell: bash
         run: |
-          # GUI: bỏ console trên Win/mac
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            pyinstaller --onefile --noconsole Biofilms/src/tool_tkinter.py
-          elif [ "$RUNNER_OS" = "macOS" ]; then
-            pyinstaller --onefile --windowed Biofilms/src/tool_tkinter.py
-          else
-            pyinstaller --onefile Biofilms/src/tool_tkinter.py
+          APP=Biofilms/src/tool_tkinter.py
+          # PyInstaller needs to collect native binaries for aicspylibczi
+          EXTRA=""
+          if [ "$RUNNER_OS" != "macOS" ]; then
+            EXTRA="--collect-all aicspylibczi --hidden-import aicspylibczi._aicspylibczi"
           fi
+
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            pyinstaller --onefile --noconsole $EXTRA "$APP"
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            pyinstaller --onefile --windowed $EXTRA "$APP"
+          else
+            pyinstaller --onefile $EXTRA "$APP"
+          fi
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
