@@ -1,4 +1,4 @@
-name: Build desktop apps
+name: Build desktop apps (Windows only)
 
 on:
   workflow_dispatch:
@@ -6,12 +6,11 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  build-win:
+    runs-on: windows-latest
     strategy:
       matrix:
-        os: [windows-latest]   # add ubuntu-latest , macos-latest later
         py: ['3.8.10']
-    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -23,8 +22,9 @@ jobs:
       - name: Install deps
         shell: bash
         run: |
+          set -euo pipefail
           python -m pip install --upgrade pip
-          # Pin versions compatible with Python 3.8
+          # Versions compatible with Python 3.8
           pip install \
             "numpy<2.0" \
             "scipy<1.11" \
@@ -37,12 +37,28 @@ jobs:
             opencv-python-headless \
             pyinstaller
 
-      - name: Build (GUI flags per OS)
+      - name: Build (Windows GUI)
         shell: bash
         run: |
+          set -euo pipefail
           ENTRY="Biofilms/src/tool_tkinter.py"
-          # Ensure PyInstaller bundles needed data/binaries
-          COMMON_OPTS="--onefile \
-            --hidden-import=cv2 \
-            --collect-binaries aicspylibczi \
-            --collect-data aicspylibczi \
+
+          # Use array to avoid quoting issues on Windows runners
+          COMMON_OPTS=(
+            --onefile
+            --noconsole
+            --hidden-import=cv2
+            --collect-binaries aicspylibczi
+            --collect-data aicspylibczi
+            --collect-all skimage
+            --noconfirm
+            --clean
+          )
+
+          pyinstaller "${COMMON_OPTS[@]}" "$ENTRY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-windows
+          path: dist/*
