@@ -1,4 +1,4 @@
-name: Build desktop apps (Windows only)
+name: Build desktop app (Windows)
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        py: ['3.8.10']
+        py: ['3.8.10']  # giữ đúng 3.8 cho aicspylibczi
 
     steps:
       - uses: actions/checkout@v4
@@ -22,76 +22,33 @@ jobs:
       - name: Install deps
         shell: bash
         run: |
-          set -euo pipefail
           python -m pip install --upgrade pip
-          # Pin versions compatible with Python 3.8
+          # Bản tối giản, pin cho Python 3.8
           pip install \
             "numpy<2.0" \
-            "scipy<1.11" \
-            "networkx<3.0" \
             scikit-image==0.20.0 \
             pillow \
-            imageio \
-            imagecodecs \
-            tifffile \
-            czifile \
             aicspylibczi \
             opencv-python-headless \
-            pyinstaller
+            "pyinstaller<6.0"  # PyInstaller 5.x tương thích Python 3.8
 
-      - name: Build (debug onedir + console onefile + gui onefile)
+      - name: Build GUI onefile
         shell: bash
         run: |
-          set -euo pipefail
           ENTRY="Biofilms/src/tool_tkinter.py"
+          pyinstaller ^
+            --noconfirm ^
+            --clean ^
+            --onefile ^
+            --noconsole ^
+            --name BiofilmsGUI ^
+            --collect-all aicspylibczi ^
+            --collect-all tifffile ^
+            --collect-all imagecodecs ^
+            --collect-binaries cv2 ^
+            "$ENTRY"
 
-          COMMON_OPTS=(
-            --noconfirm
-            --clean
-            # Tk/Tcl (filedialog/messagebox)
-            --hidden-import=tkinter
-            --hidden-import=_tkinter
-            --hidden-import=tkinter.filedialog
-            --hidden-import=tkinter.messagebox
-            --collect-submodules tkinter
-            # OpenCV
-            --hidden-import=cv2
-            --collect-submodules cv2
-            --collect-binaries cv2
-            # Imaging stack
-            --collect-all aicspylibczi
-            --collect-all imagecodecs
-            --collect-binaries imagecodecs
-            --collect-all tifffile
-            --collect-all numpy
-            --collect-all skimage
-          )
-
-          # 1) DEBUG: onedir + console (easier to inspect DLLs)
-          pyinstaller "${COMMON_OPTS[@]}" --onedir  --console  --name BiofilmsDebug   "$ENTRY"
-
-          # 2) Release (console) onefile
-          pyinstaller "${COMMON_OPTS[@]}" --onefile --console  --name BiofilmsConsole "$ENTRY"
-
-          # 3) Release (GUI) onefile
-          pyinstaller "${COMMON_OPTS[@]}" --onefile --noconsole --name BiofilmsGUI     "$ENTRY"
-
-          echo "Built artifacts:"
-          ls -lah dist || true
-
-      - name: Upload artifact (debug-onedir)
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-windows-debug-onedir
-          path: dist/BiofilmsDebug/**
-
-      - name: Upload artifact (console)
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-windows-console
-          path: dist/BiofilmsConsole.exe
-
-      - name: Upload artifact (gui)
+      - name: Upload artifact (GUI exe)
         uses: actions/upload-artifact@v4
         with:
           name: app-windows
