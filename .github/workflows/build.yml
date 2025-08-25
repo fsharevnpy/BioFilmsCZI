@@ -9,7 +9,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, macos-latest] # ubuntu-20.04
+        os: [windows-latest, macos-latest]  # add linux if needed
         py: ['3.8.10']
     runs-on: ${{ matrix.os }}
 
@@ -24,17 +24,29 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller czifile imageio numpy
+          # Use headless OpenCV to avoid GUI backends; include libs used by the app
+          pip install \
+            pyinstaller \
+            opencv-python-headless \
+            pillow \
+            aicspylibczi \
+            czifile \
+            imageio \
+            numpy
 
       - name: Build (GUI flags per OS)
         shell: bash
         run: |
+          # Extra hooks for cv2 and aicspylibczi to ensure binaries/data are bundled
+          COMMON_OPTS="--onefile --hidden-import=cv2 --collect-binaries aicspylibczi --collect-data aicspylibczi"
+          ENTRY="Biofilms/src/tool_tkinter.py"
+
           if [ "$RUNNER_OS" = "Windows" ]; then
-            pyinstaller --onefile --noconsole Biofilms/src/tool_tkinter.py
+            pyinstaller $COMMON_OPTS --noconsole "$ENTRY"
           elif [ "$RUNNER_OS" = "macOS" ]; then
-            pyinstaller --onefile --windowed Biofilms/src/tool_tkinter.py
+            pyinstaller $COMMON_OPTS --windowed "$ENTRY"
           else
-            pyinstaller --onefile Biofilms/src/tool_tkinter.py
+            pyinstaller $COMMON_OPTS "$ENTRY"
           fi
 
       - name: Upload artifacts
