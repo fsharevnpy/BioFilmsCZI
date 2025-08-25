@@ -22,42 +22,54 @@ jobs:
       - name: Install deps
         shell: bash
         run: |
-          set -euo pipefail
-          python -m pip install --upgrade pip
-          # Versions compatible with Python 3.8
-          pip install \
-            "numpy<2.0" \
-            "scipy<1.11" \
-            "networkx<3.0" \
-            scikit-image==0.20.0 \
-            pillow \
-            imageio \
-            czifile \
-            aicspylibczi \
-            opencv-python-headless \
-            pyinstaller
+            set -euo pipefail
+            python -m pip install --upgrade pip
+            # Versions compatible with Python 3.8
+            pip install \
+              "numpy<2.0" \
+              "scipy<1.11" \
+              "networkx<3.0" \
+              scikit-image==0.20.0 \
+              pillow \
+              imageio \
+              imagecodecs \
+              tifffile \
+              czifile \
+              aicspylibczi \
+              opencv-python-headless \
+              pyinstaller
 
-      - name: Build (Windows GUI)
+      - name: Build (console + windowed)
         shell: bash
         run: |
           set -euo pipefail
           ENTRY="Biofilms/src/tool_tkinter.py"
 
-          # Use array to avoid quoting issues on Windows runners
           COMMON_OPTS=(
             --onefile
-            --noconsole
+            --noconfirm
+            --clean
             --hidden-import=cv2
             --collect-binaries aicspylibczi
             --collect-data aicspylibczi
-            --collect-all skimage
-            --noconfirm
-            --clean
+            --collect-binaries imagecodecs
+            --collect-data imagecodecs
+            --collect-all tifffile
+            --collect-all numpy
           )
 
-          pyinstaller "${COMMON_OPTS[@]}" "$ENTRY"
+          # Console build (để debug nếu crash)
+          pyinstaller "${COMMON_OPTS[@]}" "$ENTRY" --console
+          # Windowed build (bản GUI bình thường)
+          pyinstaller "${COMMON_OPTS[@]}" "$ENTRY" --noconsole
 
-      - name: Upload artifact
+      - name: Upload artifact (console)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-windows-console
+          path: dist/*
+
+      - name: Upload artifact (windowed)
         uses: actions/upload-artifact@v4
         with:
           name: app-windows

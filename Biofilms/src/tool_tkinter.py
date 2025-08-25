@@ -1,3 +1,14 @@
+# --- crash logging early ---
+import faulthandler, os, sys, tempfile, datetime, traceback
+log_path = os.path.join(tempfile.gettempdir(), f"biofilms_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+faulthandler.enable(open(log_path, "w"))
+
+def log_ex():
+    with open(log_path, "a") as f:
+        f.write("\n--- exception ---\n")
+        traceback.print_exc(file=f)
+
+################################
 import cv2
 import numpy as np
 from typing import List, Tuple, Dict, Any
