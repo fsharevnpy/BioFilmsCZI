@@ -1,4 +1,4 @@
-name: Build desktop app (Windows)
+name: Build desktop app (Windows & macOS)
 
 on:
   workflow_dispatch:
@@ -10,33 +10,33 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        py: ['3.8.10']  # giữ đúng 3.8 cho aicspylibczi
-
+        py: ['3.8.10'] # giữ 3.8 cho aicspylibczi
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.py }}
-
+          cache: 'pip'
       - name: Install deps
         shell: bash
         run: |
-          python -m pip install --upgrade pip
-          # Bản tối giản, pin cho Python 3.8
+          python -m pip install --upgrade pip wheel setuptools
           pip install \
             "numpy<2.0" \
             scikit-image==0.20.0 \
             pillow \
             aicspylibczi \
-            opencv-python-headless \
-            "pyinstaller<6.0"  # PyInstaller 5.x tương thích Python 3.8
-
-      - name: Build GUI onefile
+            tifffile \
+            imagecodecs \
+            openpyxl \
+            opencv-contrib-python-headless \
+            "pyinstaller<6.0"
+      - name: Build GUI onefile (Win)
         shell: bash
         run: |
-          ENTRY="Biofilms/src/tool_tkinter.py"
-          pyinstaller \
+          cd Biofilms/src
+          ENTRY="tool_tkinter.py"
+          python -m PyInstaller \
             --noconfirm \
             --clean \
             --onefile \
@@ -45,11 +45,76 @@ jobs:
             --collect-all aicspylibczi \
             --collect-all tifffile \
             --collect-all imagecodecs \
+            --collect-all openpyxl \
+            --collect-all tk \
+            --collect-all tcl \
             --collect-binaries cv2 \
+            --add-data "BioAnalyzer.png;." \
+            --add-data "BioAnalyzer.ico;." \
             "$ENTRY"
-
       - name: Upload artifact (GUI exe)
         uses: actions/upload-artifact@v4
         with:
           name: app-windows
-          path: dist/BiofilmsGUI.exe
+          path: Biofilms/src/dist/BiofilmsGUI.exe
+
+  build-macos:
+    # build 2 kiến trúc: Intel (x86_64) và Apple Silicon (arm64)
+    strategy:
+      matrix:
+        runner: [macos-13, macos-14]  # 13 ~ x86_64, 14 ~ arm64
+        py: ['3.8.10']
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.py }}
+          cache: 'pip'
+      - name: Install deps
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
+          pip install \
+            "numpy<2.0" \
+            scikit-image==0.20.0 \
+            pillow \
+            aicspylibczi \
+            tifffile \
+            imagecodecs \
+            openpyxl \
+            opencv-contrib-python-headless \
+            "pyinstaller<6.0"
+      - name: Build GUI app (macOS)
+        shell: bash
+        run: |
+          cd Biofilms/src
+          ENTRY="tool_tkinter.py"
+          # --windowed để tạo .app; --onefile nhúng payload vào app
+          python -m PyInstaller \
+            --noconfirm \
+            --clean \
+            --windowed \
+            --onefile \
+            --name BiofilmsGUI \
+            --collect-all aicspylibczi \
+            --collect-all tifffile \
+            --collect-all imagecodecs \
+            --collect-all openpyxl \
+            --collect-all tk \
+            --collect-all tcl \
+            --collect-binaries cv2 \
+            --add-data "BioAnalyzer.png:." \
+            --add-data "BioAnalyzer.ico:." \
+            "$ENTRY"
+      - name: Zip .app for upload
+        shell: bash
+        run: |
+          cd Biofilms/src/dist
+          # Đóng gói .app để giữ nguyên bundle structure khi tải về
+          ditto -c -k --sequesterRsrc --keepParent BiofilmsGUI.app BiofilmsGUI-${{ matrix.runner }}.zip
+      - name: Upload artifact (macOS .app zipped)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-macos-${{ matrix.runner }}
+          path: Biofilms/src/dist/BiofilmsGUI-${{ matrix.runner }}.zip
