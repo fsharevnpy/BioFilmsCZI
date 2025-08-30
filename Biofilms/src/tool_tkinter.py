@@ -1119,6 +1119,8 @@ def update_preview():
     zoom = 1.0
     if current_view == "image":
         refresh_layout_and_view()
+    else:
+        render_info_view()
 
 
 # ---------- Multi-file + GUI plumbing ----------
@@ -1162,6 +1164,8 @@ def on_select_file(event=None):
     _apply_c_visibility()
     meta_dict = entry["meta"]
     update_preview()
+    if current_view == "info":
+        render_info_view()
 
 import threading, queue, time
 
@@ -1433,6 +1437,8 @@ def browse_files():
         _apply_c_visibility()
         globals()["meta_dict"] = entry["meta"]
         update_preview()
+        if current_view == "info":
+            render_info_view()
 
     _finish_when_done()
 
