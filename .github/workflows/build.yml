@@ -94,29 +94,35 @@ jobs:
       - name: Install system libs for imagecodecs
         shell: bash
         run: |
+          set -e
           brew update
-          brew install \
-            libaec \
-            c-blosc \
-            zfp \
-            xz \
-            libdeflate \
-            jpeg-turbo \
-            openjpeg \
-            libtiff \
-            little-cms2 \
-            libpng \
-            zstd \
-            lz4 \
-            webp \
-            brotli \
-            snappy
+
+          brew_try() {
+            if brew info --json=v2 "$1" >/dev/null 2>&1; then
+              brew list --versions "$1" >/dev/null 2>&1 || brew install "$1"
+            else
+              echo "[skip] no formula: $1"
+            fi
+          }
+
+          brew_try libaec          # fix 'libaec.h' not found
+          brew_try c-blosc         # fix 'blosc.h' not found
+          brew_try jpeg-turbo
+          brew_try openjpeg
+          brew_try libtiff
+          brew_try little-cms2
+          brew_try libpng
+          brew_try zstd
+          brew_try lz4
+          brew_try webp
+          brew_try brotli
+          brew_try snappy
+          brew_try libdeflate
 
           echo "CPPFLAGS=-I$(brew --prefix)/include" >> $GITHUB_ENV
           echo "CFLAGS=-I$(brew --prefix)/include"   >> $GITHUB_ENV
           echo "LDFLAGS=-L$(brew --prefix)/lib"      >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig" >> $GITHUB_ENV
-
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
           echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
 
