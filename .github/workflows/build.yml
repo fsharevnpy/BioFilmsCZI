@@ -9,12 +9,10 @@ jobs:
   build-win:
     runs-on: windows-latest
     strategy:
-      matrix:
-        py: ['3.8.10']  # giữ 3.8 cho aicspylibczi
+      matrix: { py: ['3.8.10'] }
     steps:
       - uses: actions/checkout@v4
 
-      # Tạo requirements.txt để setup-python có cái mà cache
       - name: Write requirements.txt
         shell: bash
         run: |
@@ -42,40 +40,38 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           pip install -r requirements.txt
 
-      - name: Build GUI onefile (Win)
+      - name: Build (Windows)
         shell: bash
         run: |
           cd Biofilms/src
           ENTRY="tool_tkinter.py"
           python -m PyInstaller \
-            --noconfirm \
-            --clean \
             --onefile \
             --noconsole \
-            --name BiofilmsGUI \
+            --name BioAnalyzer \
+            --icon BioAnalyzer.ico \
+            --add-data "BioAnalyzer.png;." \
+            --add-data "BioAnalyzer.ico;." \
             --collect-all aicspylibczi \
             --collect-all tifffile \
             --collect-all imagecodecs \
+            --collect-all cv2 \
             --collect-all openpyxl \
-            --collect-all tk \
-            --collect-all tcl \
-            --collect-binaries cv2 \
-            --add-data "BioAnalyzer.png;." \
-            --add-data "BioAnalyzer.ico;." \
+            --hidden-import cv2.ximgproc \
             "$ENTRY"
 
-      - name: Upload artifact (GUI exe)
+      - name: Upload artifact (exe)
         uses: actions/upload-artifact@v4
         with:
           name: app-windows
-          path: Biofilms/src/dist/BiofilmsGUI.exe
+          path: Biofilms/src/dist/BioAnalyzer.exe
 
   build-macos:
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        runner: [macos-13, macos-14]  # 13 ~ x86_64, 14 ~ arm64
+        runner: [macos-13, macos-14]   # Intel & Apple Silicon
         py: ['3.8.10']
-    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -94,6 +90,19 @@ jobs:
           pyinstaller<6.0
           EOF
 
+      # Fix build-from-source cho imagecodecs trên macOS + Python 3.8
+      - name: Install system libs for imagecodecs
+        shell: bash
+        run: |
+          brew update
+          brew install libaec libjpeg openjpeg libtiff little-cms2 libpng zstd lz4 webp
+          echo "CPPFLAGS=-I$(brew --prefix)/include" >> $GITHUB_ENV
+          echo "CFLAGS=-I$(brew --prefix)/include"   >> $GITHUB_ENV
+          echo "LDFLAGS=-L$(brew --prefix)/lib"      >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig" >> $GITHUB_ENV
+          echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
+          echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.py }}
@@ -106,36 +115,37 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           pip install -r requirements.txt
 
-      - name: Build GUI app (macOS)
+      - name: Build (macOS)
         shell: bash
         run: |
           cd Biofilms/src
           ENTRY="tool_tkinter.py"
+          ICON_ARG=""
+          if [ -f "BioAnalyzer.icns" ]; then ICON_ARG="--icon BioAnalyzer.icns"; fi
           python -m PyInstaller \
-            --noconfirm \
-            --clean \
-            --windowed \
             --onefile \
-            --name BiofilmsGUI \
+            --windowed \
+            --noconsole \
+            --name BioAnalyzer \
+            ${ICON_ARG} \
+            --add-data "BioAnalyzer.png:." \
+            --add-data "BioAnalyzer.ico:." \
             --collect-all aicspylibczi \
             --collect-all tifffile \
             --collect-all imagecodecs \
+            --collect-all cv2 \
             --collect-all openpyxl \
-            --collect-all tk \
-            --collect-all tcl \
-            --collect-binaries cv2 \
-            --add-data "BioAnalyzer.png:." \
-            --add-data "BioAnalyzer.ico:." \
+            --hidden-import cv2.ximgproc \
             "$ENTRY"
 
-      - name: Zip .app for upload
+      - name: Zip .app
         shell: bash
         run: |
           cd Biofilms/src/dist
-          ditto -c -k --sequesterRsrc --keepParent BiofilmsGUI.app BiofilmsGUI-${{ matrix.runner }}.zip
+          ditto -c -k --sequesterRsrc --keepParent BioAnalyzer.app BioAnalyzer-${{ matrix.runner }}.zip
 
-      - name: Upload artifact (macOS .app zipped)
+      - name: Upload artifact (macOS .app)
         uses: actions/upload-artifact@v4
         with:
           name: app-macos-${{ matrix.runner }}
-          path: Biofilms/src/dist/BiofilmsGUI-${{ matrix.runner }}.zip
+          path: Biofilms/src/dist/BioAnalyzer-${{ matrix.runner }}.zip
