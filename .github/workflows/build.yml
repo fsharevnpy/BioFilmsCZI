@@ -95,11 +95,28 @@ jobs:
         shell: bash
         run: |
           brew update
-          brew install libaec libjpeg openjpeg libtiff little-cms2 libpng zstd lz4 webp
+          brew install \
+            libaec \
+            c-blosc \
+            zfp \
+            xz \
+            libdeflate \
+            jpeg-turbo \
+            openjpeg \
+            libtiff \
+            little-cms2 \
+            libpng \
+            zstd \
+            lz4 \
+            webp \
+            brotli \
+            snappy
+
           echo "CPPFLAGS=-I$(brew --prefix)/include" >> $GITHUB_ENV
           echo "CFLAGS=-I$(brew --prefix)/include"   >> $GITHUB_ENV
           echo "LDFLAGS=-L$(brew --prefix)/lib"      >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig" >> $GITHUB_ENV
+
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
           echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
 
