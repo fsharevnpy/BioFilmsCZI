@@ -96,7 +96,8 @@ jobs:
         run: |
           set -e
           brew update
-
+      
+          # Helper: only install if formula exists (won't fail the job)
           brew_try() {
             if brew info --json=v2 "$1" >/dev/null 2>&1; then
               brew list --versions "$1" >/dev/null 2>&1 || brew install "$1"
@@ -104,9 +105,12 @@ jobs:
               echo "[skip] no formula: $1"
             fi
           }
-
-          brew_try libaec          # fix 'libaec.h' not found
-          brew_try c-blosc         # fix 'blosc.h' not found
+      
+          # Needed headers/libs:
+          brew_try libaec        # fixes 'libaec.h'
+          brew_try c-blosc       # fixes 'blosc.h'
+          brew_try giflib        # libgif.* (giflib formula)
+          brew_try libheif       # fixes 'libheif/heif.h'
           brew_try jpeg-turbo
           brew_try openjpeg
           brew_try libtiff
@@ -118,13 +122,22 @@ jobs:
           brew_try brotli
           brew_try snappy
           brew_try libdeflate
-
+      
+          # Point compilers to Homebrew includes/libs (arm: /opt/homebrew, intel: /usr/local)
           echo "CPPFLAGS=-I$(brew --prefix)/include" >> $GITHUB_ENV
           echo "CFLAGS=-I$(brew --prefix)/include"   >> $GITHUB_ENV
           echo "LDFLAGS=-L$(brew --prefix)/lib"      >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig" >> $GITHUB_ENV
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
-          echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
+      
+          # Build for the host arch only (avoid universal2 linking against arm64-only Homebrew libs)
+          if [ "$(uname -m)" = "arm64" ]; then
+            echo "ARCHFLAGS=-arch arm64" >> $GITHUB_ENV
+            echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
+          else
+            echo "ARCHFLAGS=-arch x86_64" >> $GITHUB_ENV
+            echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
+          fi
 
       - uses: actions/setup-python@v5
         with:
