@@ -70,12 +70,13 @@ jobs:
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        runner: [macos-13, macos-14]   # Intel & Apple Silicon
+        runner: [macos-13, macos-14]
         py: ['3.8.10']
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write requirements.txt
+      # macOS requirements: identical to Windows except NO imagecodecs
+      - name: Write requirements.txt (macOS)
         shell: bash
         run: |
           cat > requirements.txt << 'EOF'
@@ -84,64 +85,26 @@ jobs:
           pillow
           aicspylibczi
           tifffile
-          imagecodecs
           openpyxl
           opencv-contrib-python-headless
           pyinstaller<6.0
           EOF
 
-      # Fix build-from-source cho imagecodecs trên macOS + Python 3.8
-      - name: Install system libs for imagecodecs
+      # (optional) keep the Homebrew step if you still want other codecs available for Pillow etc.
+      - name: Install system libs (optional)
         shell: bash
         run: |
-          set -e
           brew update
-
-          # Helper to install only if formula exists
-          brew_try() {
-            if brew info --json=v2 "$1" >/dev/null 2>&1; then
-              brew list --versions "$1" >/dev/null 2>&1 || brew install "$1"
-            else
-              echo "[skip] no formula: $1"
-            fi
-          }
-
-          # Minimum set we need (you already saw these missing one by one)
-          brew_try libaec
-          brew_try c-blosc
-          brew_try giflib
-          brew_try libheif
-          brew_try jpeg-turbo
-          brew_try openjpeg
-          brew_try libtiff
-          brew_try little-cms2
-          brew_try libpng
-          brew_try zstd
-          brew_try lz4
-          brew_try webp
-          brew_try brotli
-          brew_try snappy
-          brew_try libdeflate
-
-          HB_PREFIX="$(brew --prefix)"
-          OJ_PREFIX="$(brew --prefix openjpeg || true)"
-
-          # Compose include paths, explicitly adding the versioned openjpeg include dir
-          OJ_INC1="${OJ_PREFIX:+-I${OJ_PREFIX}/include}"
-          OJ_INC2=""
-          if [ -n "$OJ_PREFIX" ]; then
-            # pick the first matching openjpeg-2.* dir if present
-            dir="$(ls -d ${OJ_PREFIX}/include/openjpeg-2.* 2>/dev/null | head -n1 || true)"
-            if [ -n "$dir" ]; then OJ_INC2="-I${dir}"; fi
-          fi
-
-          echo "CPPFLAGS=-I${HB_PREFIX}/include ${OJ_INC1} ${OJ_INC2}" >> $GITHUB_ENV
-          echo "CFLAGS=-I${HB_PREFIX}/include ${OJ_INC1} ${OJ_INC2}"   >> $GITHUB_ENV
-          echo "LDFLAGS=-L${HB_PREFIX}/lib ${OJ_PREFIX:+-L${OJ_PREFIX}/lib}" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=${HB_PREFIX}/lib/pkgconfig" >> $GITHUB_ENV
+          # harmless if missing; skips won’t fail the job
+          for f in libaec c-blosc giflib libheif jpeg-turbo openjpeg libtiff little-cms2 libpng zstd lz4 webp brotli snappy libdeflate; do
+            brew info --json=v2 "$f" >/dev/null 2>&1 && (brew list --versions "$f" >/dev/null 2>&1 || brew install "$f") || echo "[skip] $f"
+          done
+          HB="$(brew --prefix)"
+          echo "CPPFLAGS=-I$HB/include" >> $GITHUB_ENV
+          echo "CFLAGS=-I$HB/include"   >> $GITHUB_ENV
+          echo "LDFLAGS=-L$HB/lib"      >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$HB/lib/pkgconfig" >> $GITHUB_ENV
           echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
-
-          # Build for host arch only (avoid universal2 issues with arm64-only Homebrew libs)
           if [ "$(uname -m)" = "arm64" ]; then
             echo "ARCHFLAGS=-arch arm64" >> $GITHUB_ENV
             echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
@@ -149,7 +112,6 @@ jobs:
             echo "ARCHFLAGS=-arch x86_64" >> $GITHUB_ENV
             echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
           fi
-
 
       - uses: actions/setup-python@v5
         with:
@@ -161,7 +123,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip wheel setuptools
-          IMAGECODECS_SKIP=jpegxr pip install -r requirements.txt
+          pip install -r requirements.txt
 
       - name: Build (macOS)
         shell: bash
@@ -169,7 +131,7 @@ jobs:
           cd Biofilms/src
           ENTRY="tool_tkinter.py"
           ICON_ARG=""
-          if [ -f "BioAnalyzer.icns" ]; then ICON_ARG="--icon BioAnalyzer.icns"; fi
+          [ -f "BioAnalyzer.icns" ] && ICON_ARG="--icon BioAnalyzer.icns"
           python -m PyInstaller \
             --onefile \
             --windowed \
@@ -180,7 +142,6 @@ jobs:
             --add-data "BioAnalyzer.ico:." \
             --collect-all aicspylibczi \
             --collect-all tifffile \
-            --collect-all imagecodecs \
             --collect-all cv2 \
             --collect-all openpyxl \
             --hidden-import cv2.ximgproc \
